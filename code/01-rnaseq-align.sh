@@ -65,8 +65,8 @@ do
     done
     
     ## Run pipeline
-    #   run_fastqc
-    #   run_trimgalore
+      run_fastqc
+      run_trimgalore
       run_star
       sam_index
       bam2bw
