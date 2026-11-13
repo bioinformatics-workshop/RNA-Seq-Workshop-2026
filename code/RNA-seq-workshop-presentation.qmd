@@ -4,28 +4,29 @@ subtitle: "Hosted by the IIGB Bioinformatics Core"
 author: "Brandon Le"
 date-modified: 11-13-2026
 institute: "Genomics Building 1207G"
+affiliation: "IIGB, University of California, Riverside"
 code-line-numbers: true
 code-overflow: scroll
-affiliation: "IIGB, University of California, Riverside"
-format: 
+link-external-newwindow: true
+editor: visual
+format:
   html:
-    default
+    embed-resources: true
+    standalone: true
   revealjs:
+    output-file: RNA-seq-presentation-revealjs.html
     footer: "[https://github.com/bioinformatics-workshop/RNA-seq-workshop-2026](https://github.com/bioinformatics-workshop/RNA-seq-workshop-2026)"
     theme: simple
     scrollable: true
     smaller: false
-    output-file: RNA-seq-presentation-revealjs.html
-editor: visual
-slide-number: true
-title-slide-attributes:
-    data-background-image: img/UCR-BC-logo-800x200.png
-    data-background-size: 70%
-    data-background-opacity: "1"
-    data-background-position: "top"
-link-external-newwindow: true
-embed-resources: true
-standalone: true
+    slide-number: true
+    embed-resources: true
+    standalone: true
+    title-slide-attributes:
+      data-background-image: img/UCR-BC-logo-800x200.png
+      data-background-size: 70%
+      data-background-opacity: "1"
+      data-background-position: "top"
 ---
 
 # About the Core
@@ -214,7 +215,7 @@ Reference: [Van den Berge et. al (2019) Annu Rev Biomed Data Sci](https://www.an
 <br>
 
 | Category | Description |
-|----|----|
+|------------------------------------|------------------------------------|
 | **BioProject** | PRJNA936435 |
 | **GEO Series** | [GSE225576](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE225576) |
 | **Title** | An atlas of the aging mouse transcriptome and proteome reveals the features of age-related post-transcriptional dysregulation [(PMID: 39353907](https://www.nature.com/articles/s41467-024-52845-x)) |
@@ -240,7 +241,7 @@ Reference: [Van den Berge et. al (2019) Annu Rev Biomed Data Sci](https://www.an
 ## Analysis Toolkit {.smaller}
 
 | Program | Type | Software | Reference | Misc |
-|----|----|----|----|----|
+|---------------|---------------|---------------|---------------|---------------|
 | Fastqc | QC | [Software](https://www.bioinformatics.babraham.ac.uk/projects/fastqc/) | [Ref](https://www.bioinformatics.babraham.ac.uk/projects/fastqc/) |  |
 | Trim_galore | QC | [Software](https://www.bioinformatics.babraham.ac.uk/projects/trim_galore/) | [Ref](https://zenodo.org/records/7598955) |  |
 | Multiqc | QC | [Software](https://multiqc.info) | [Ref](https://academic.oup.com/bioinformatics/article/32/19/3047/2196507) | [Manual](https://multiqc.info/docs/) |
