@@ -1,0 +1,267 @@
+### Wrapper Functions #################
+# Wrappers to run specific programs
+# You can comment out or add parameters as needed
+
+################## get timestamp ############################## 
+###############################################################  
+
+timestamp(){
+
+    date +%F_%T
+
+}
+
+################## fastqc wrapper ############################# 
+###############################################################  
+
+run_fastqc(){
+
+    module load fastqc/0.11.9 
+
+    # setting params
+    FASTQC_PARAMS=(
+        -f fastq
+        -t ${NUM_CORES}
+        --noextract
+        -o ${FASTQC_DIR}
+    )
+
+    if [ ${PAIRED} == "T" ]
+    then
+        fastqc "${FASTQC_PARAMS[@]}" \
+            $RAW_DIR/${FASTQ1} $RAW_DIR/${FASTQ2}
+    else
+        fastqc "${FASTQC_PARAMS[@]}" \
+            $RAW_DIR/${FASTQ1}
+    fi
+}
+
+################ trim_galore wrapper ########################## 
+###############################################################  
+
+run_trimgalore(){
+
+    module load trim_galore/0.6.7
+
+    # setting params
+    TRIM_PARAMS=(
+        --fastqc
+        --gzip
+        --trim-n
+        -j ${NUM_CORES}
+        -o ${TRIMGALORE_DIR}
+        --basename ${SAMPLENAME}
+    )
+
+    if [ ${PAIRED} == "T" ]
+    then
+        trim_galore "${TRIM_PARAMS[@]}" \
+            --paired \
+            $RAW_DIR/${FASTQ1} $RAW_DIR/${FASTQ2}
+    else
+        trim_galore "${TRIM_PARAMS[@]}" \
+            $RAW_DIR/${FASTQ1}
+    fi
+}
+
+##################### star wrapper ############################
+###############################################################  
+
+run_star(){
+
+    module load star/2.7.10b
+
+    # setting params
+    STAR_PARAMS=(
+        --runThreadN ${NUM_CORES}
+        --runMode alignReads
+        --genomeDir ${STAR_INDEX}
+        --readFilesCommand zcat
+        --outSAMtype BAM SortedByCoordinate
+        --outFileNamePrefix ${STAR_DIR}/${SAMPLENAME}_
+        --outFilterMismatchNmax 2
+        --outFilterMultimapNmax 1
+        --quantMode GeneCounts
+        --outWigType wiggle
+    )
+
+    if [ ${PAIRED} == "T" ]
+    then
+        STAR "${STAR_PARAMS[@]}" --readFilesIn \
+            ${TRIMGALORE_DIR}/${SAMPLENAME}_val_1.fq.gz \
+            ${TRIMGALORE_DIR}/${SAMPLENAME}_val_2.fq.gz
+    else
+        STAR "${STAR_PARAMS[@]}" --readFilesIn \
+            ${TRIMGALORE_DIR}/${SAMPLENAME}_trimmed.fq.gz
+    fi
+}
+
+run_star_index(){
+
+    module load star/2.7.11a
+
+    # unzip files
+    unpigz -c ${GENOME_FASTA} > fasta_TMP
+    unpigz -c ${GTF} > gtf_TMP
+
+    STAR_PARAMS=(
+        --runThreadN ${NUM_CORES}
+        --runMode genomeGenerate
+        --genomeDir ${STAR_INDEX}
+        --genomeFastaFiles fasta_TMP
+        --sjdbGTFfile gtf_TMP
+        --sjdbOverhang 99
+        --genomeSAindexNbases 12
+    )
+
+    STAR "${STAR_PARAMS[@]}"
+
+    # clean up
+    rm fasta_TMP gtf_TMP
+}
+
+
+################# featurecounts wrapper #######################
+###############################################################  
+
+run_featurecounts(){
+
+    module load subread/2.0.3
+
+    # setting params
+    FEATURECOUNTS_PARAMS=(
+        -T ${NUM_CORES}
+        -s ${STRANDED}
+        -a ${GTF}
+        -t exon
+        -g gene_id
+        --primary
+        -o ${FEATURECOUNTS_DIR}/${SAMPLENAME}.fcnts.txt
+    )
+
+    if [ ${PAIRED} == "T" ]
+    then
+        featureCounts "${FEATURECOUNTS_PARAMS[@]}" -p --countReadPairs \
+            ${STAR_DIR}/${SAMPLENAME}_Aligned.sortedByCoord.out.bam
+    else
+        featureCounts "${FEATURECOUNTS_PARAMS[@]}" \
+            ${STAR_DIR}/${SAMPLENAME}_Aligned.sortedByCoord.out.bam
+    fi
+}
+
+################# samtools indexing wrapper ###################  
+###############################################################  
+
+sam_index(){
+
+    module load samtools/1.17
+    samtools index -M ${STAR_DIR}/${SAMPLENAME}_Aligned.sortedByCoord.out.bam
+
+}
+
+#################### conversion to bw for IGV #################
+###############################################################  
+
+bam2bw(){
+
+    module load deeptools/3.5.1
+    
+    bamCoverage -b ${STAR_DIR}/${SAMPLENAME}_Aligned.sortedByCoord.out.bam \
+                -o ${STAR_DIR}/${SAMPLENAME}.bw \
+                -p ${NUM_CORES} \
+                --normalizeUsing CPM \
+                --exactScaling \
+                --skipNAs
+}
+
+###################  multiqc wrapper ##########################
+###############################################################  
+
+multiqc_summary(){
+
+    module load multiqc/1.19
+
+    [ ! -d "$QC_DIR" ] && mkdir -p "$QC_DIR"
+    
+    multiqc -f -o ${QC_DIR} analysis
+
+}
+
+###################### intervene wrapper ######################
+###############################################################  
+
+intervene_venn(){
+    
+    for FIGTYPE in png pdf
+    do
+        intervene venn \
+            --input "${INPUT_FILES[@]}" \
+            --type list \
+            --names ${LABELS} \
+            --save-overlaps \
+            --output ${OUTDIR}/${FACTOR} \
+            --project ${FACTOR} \
+            --figtype $FIGTYPE
+    done
+}
+
+intervene_upset(){
+    
+    for FIGTYPE in png pdf
+    do
+        intervene upset \
+            --input "${INPUT_FILES[@]}" \
+            --type list \
+            --names ${LABELS} \
+            --save-overlaps \
+            --output ${OUTDIR}/${FACTOR} \
+            --project ${FACTOR} \
+            --figtype $FIGTYPE
+    done
+}
+
+###################### salmon wrapper ######################
+###############################################################  
+
+run_salmon_index(){
+  
+  module load salmon/1.7.0
+
+  INDEX_PARAMS=(
+    -t ${GENOME_TRANSCRIPT_FASTA}
+    -i ${SALMON_INDEX}
+    --gencode
+    -d genome/decoys.txt
+    --threads ${NUM_CORES}
+  )
+
+  salmon index "${INDEX_PARAMS[@]}"
+  
+}
+
+run_salmon(){
+  
+  module load salmon/1.7.0
+
+  echo "running salmon quantification"
+  
+  QUANT_PARAMS=(
+    -i ${SALMON_INDEX}
+    -l A
+    --threads ${NUM_CORES}
+    -o ${SALMON_DIR}/${SAMPLENAME}
+    --numBootstraps 100
+  )
+
+  echo -e "PARAMETERS: $QUANT_PARAMS[@]"
+  
+  if [ ${PAIRED} == "T" ]
+  then
+      salmon quant "${QUANT_PARAMS[@]}" \
+        -1 ${TRIMGALORE_DIR}/${SAMPLENAME}_val_1.fq.gz \
+        -2 ${TRIMGALORE_DIR}/${SAMPLENAME}_val_2.fq.gz 
+  else
+      salmon quant "${QUANT_PARAMS[@]}" \
+        -r ${TRIMGALORE_DIR}/${SAMPLENAME}_trimmed.fq.gz
+  fi
+}

@@ -1,0 +1,156 @@
+---
+title: "RNA-seq Analysis Workflow"
+author: "Brandon Le"
+institute: "IIGB, University of California, Riverside"
+execute: 
+  eval: false
+format: html
+toc: true
+embed-resources: true
+standalone: true
+---
+
+**Workshop**: Reproducible research using Jupyter Notebook: RNA-seq data analysis workflow  
+**Git Repo**: https://github.com/bioinformatics-workshop/RNA-Seq-Workshop-2026  
+
+------------------------------------------------------------------------
+
+Below is a general workflow for the processing and analysis of an RNA-seq dataset. Code chunks below were implemented on the UCR HPCC cluster.
+
+**Note**: To run the code chunks in the notebook, uncomment the line and press Command + Return (Mac) or Ctrl + Enter (PC). If running these code line in a terminal, ignore the "!" symbol in front of the command.
+
+```sh
+# Copy and paste in a terminal
+sbatch code/sra-info_download.sh
+```
+
+------------------------------------------------------------------------
+
+# Data Preparation
+
+## Sample Dataset
+
+We will be working with a dataset from this paper: An atlas of the aging mouse transcriptome and proteome reveals the features of age-related post-transcriptional dysregulation [(PMID: 39353907](https://www.nature.com/articles/s41467-024-52845-x)). In this paper, the authors performed proteomic and transcriptomic analysis during mouse development of various organs (e.g., brain, kidney, etc). The data are available in the NCBI Gene Expression Omnibus (GEO) database with accession [GSE225576](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE225576) or BioProject PRJNA936435.
+
+![](https://aging-proteomics.info/images/Top_page_image.png){fig-align="center" width="600"}
+
+## Obtain SRA sample list
+
+For this demo, we will use a publicly available dataset from the [Sequence Read Archive](https://www.ncbi.nlm.nih.gov/sra) (SRA) hosted at the National Center for Biotechnology Information (NCBI). To download the demo dataset, we will obtain a SRA sample list containing information for a BioProject stored in the SRA database using the BioProject ID: PRJNA936435.
+
+We will first use the following shell script to obtain information about the BioProject.
+
+```sh
+sbatch code/sra-info_download.sh
+```
+
+The script will generate a `PRJNA936435.metadata.tmp` file in the `raw` folder. This file contain relevant information about the dataset including accession numbers for each sample. Lets examine the content of the file.
+
+```sh
+cat -n raw/PRJNA936435.metadata.tmp
+```
+
+## Generate metadata file
+
+A metadata file is used to describe the sequencing project and used for downstream analysis.
+
+**NOTE:** Metadata files are great for storing relevant information about the sample and project.
+
+For this demo, we created a file containing several columns (the **first three columns are required** and the *remaining columns are optional*)
+
+The metadata file consists of seven columns:
+
+-   **samplename** : sample name for labeling (required)
+-   **fq1** : filepath to read1 (required)
+-   **fq2** : filepath to read2 (required if paired-end)
+-   **srr_id** : SRR ID from SRA run
+-   **sex**: male
+-   **strain**: C57BL/6J
+-   **genotype**: wild type
+-   **organ**: brain, heart, kidney, liver, lung, muscle, skin
+-   **age**: 6, 15, 24, 30 (months)
+-   **biorep**: biological replicate number (1-4)
+-   **factor**: the factor used for differential expression comparison
+
+The `samplename` is used for all downstream analysis.
+
+```sh
+# Run this script to create the metadata file
+Rscript --vanilla code/metadata.R
+```
+
+```sh
+cat metadata/metadata.csv
+```
+
+------------------------------------------------------------------------
+
+## Data Download
+
+We will use the accession information (SRRXXXXXXXX) to download the data from the NCBI SRA database. The dataset consists of \> 112 samples. For simplicity, we will download a subset of the data consisting of samples at 6 months and ignoring the aorta samples for a total of 28 samples.
+
+```sh
+# Run to process samples 2 to 29
+sbatch -a 2-29 code/sra_download.sh
+```
+
+The shell script is executed as an array. The `-a 2-29` portion of the command allows processing the array lines 2 to 29 corresponding to samples 1 to 28 from the `PRJNA936435.metadata.tmp` file. This means that all 28 samples will be processed in parallel rather than sequentially.
+
+**For Example:**
+
+-   To process the first two samples, we would run `-a 2-3`.\
+-   To process sample rows 3, 5, and 6, we run `-a 3,5,6`. This allows us to submit individual jobs for each sample in parallel.
+
+Note: Row 1 contains the headers
+
+------------------------------------------------------------------------
+
+## Genome Download
+
+Genome sequence and annotation files were downloaded for the Mouse genome (mm39/GRCm39 - June 2020).
+
+Resources available at: [UCSC Genomes](https://hgdownload.soe.ucsc.edu/goldenPath/mm39/bigZips)
+
+```sh
+# Run to download genome information
+sbatch code/download_genome.sh
+```
+
+------------------------------------------------------------------------
+
+# RNA-Seq Data Processing
+
+The RNA-seq data processing will consist of three major steps:
+
+1.  Generate the index for the reference genome
+2.  QC and alignment
+3.  Differential expression analysis
+
+## Indexing the Reference genome
+
+Indexing provides a fast method to align the reads to the reference genome. We will use the [STAR](https://academic.oup.com/bioinformatics/article/29/1/15/272537) aligner to first index the genome and then alignment.
+
+```sh
+# Run to generate an index for the genome
+sbatch code/00-rnaseq-build-index.sh
+```
+
+## QC and read alignments
+
+We will run quality control on the raw reads using `Fastqc` and `trim_galore` to remove low-quality bases and adapters. Then align the trimmed reads to the reference genome and generate outputs for visualization on a genome browser.
+
+**Note**: we start at 2-29 because our metadata.csv file contains a header row, which is the first row. Our samples starts from row 2 to row 29.
+
+```sh
+# Run to process each sample in parallel
+sbatch -a 2-29 code/01-rnaseq-align.sh
+```
+
+## Differential Expression analysis
+
+After QC and alignment, we can quantify the read counts per gene and run differential expression analysis using [DESeq2](https://genomebiology.biomedcentral.com/articles/10.1186/s13059-014-0550-8). The differential expression analysis pipeline will generate PCA plots, DEG lists, and volcano plots. All the outputs are in the "analysis" directory organized by program steps (e.g., fastqc, trimgalore, etc).
+
+```sh
+# Run for differential expression analysis
+sbatch code/02-rnaseq-differential-abundance.sh
+```
